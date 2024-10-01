@@ -6,6 +6,7 @@ from GCN_model import *
 from attention import *
 from utils import *
 from torch.nn import CrossEntropyLoss
+from transformers import LongformeModel, LongformerTokenizer
 
     
 
@@ -52,77 +53,70 @@ class Encoder(nn.Module):
     def forward(self, inputs, mask, label_emb):
         batch_size = inputs.size(0)
         break_probs = []
-        x = self.word_embed(inputs) #input 输入到word embedding层, 输出的x为[b,s,d_model]
+        x = self.word_embed(inputs) #input is input to the word embedding layer, and the output x is [b, s, d_model]
         group_prob = 0.
         weight = 0.
 
-        #EncoderLayer层，获取输出x，以及attention权重和概率矩阵融合后的结果‘attn_weight’,输出的x为[b,s,d_model],attn_weight为[b,h,s,s]
+       #EncoderLayer layer, get the output x, and the result of the fusion of attention weight and probability matrix 'attn_weight', the output x is [b, s, d_model], attn_weight is [b, h, s, s]
         for i, layer in enumerate(self.layers):
             x,group_prob,break_prob, attn_weight = layer(x, mask,group_prob)
             break_probs.append(break_prob)
-            if i == 3:    #取第三层transformer的attn_weight值作为邻接矩阵
+            if i == 3:
                 weight = attn_weight
 
-        #获取Tree-Transformer的[CLS]的输出表示，即首token的表示,输出维度为[b,d_model]
         pooled_output = self.pooler(x)
 
-        #将Tree-Transformer(attention)的权重使用CNN进行特征提取
         weight = self.bnorm2d(weight) #self.cnn(weight)
 
-        break_probs = torch.stack(break_probs, dim=1) #用于生成语法树的概率矩阵,矩阵为[b,N,s,s]
+        break_probs = torch.stack(break_probs, dim=1) 
         
         x = self.norm(x)
-        #将邻接矩阵按照attention的头数分割，形成h个邻接矩阵，输入到gcn中,输出的x为[b,s,d_model]
+        
         adjs = [adj.squeeze(1) for adj in torch.split(weight,1,dim=1)]
         for i in range(self.gcn_layers):
             x = self.gcns[i](x,adjs)
 
-        x = torch.mean(x,dim=1,keepdim=False) #x为[b,d_model]
-        #x = torch.cat([x,pooled_output],dim=-1) #x变为[b,2*d_model]
-
-        #获得标签图输出
+        x = torch.mean(x,dim=1,keepdim=False) 
+        
         if self.is_label_g:
-            #x = x.unsqueeze(1)  #将x扩展为[b,1,2*d_model],方便后续计算
-            pooled_output = pooled_output.unsqueeze(1) #扩展为[b,1,d_model]
+           
+            pooled_output = pooled_output.unsqueeze(1) 
             label_emb = label_emb[0]
             adj = generate_adj(self.A).detach()
             g_x = self.gc1(label_emb, adj)
             g_x = self.relu(g_x)
-            g_x = self.gc2(g_x, adj) #g_x输出的维度为[1, label_N, d_model]
-            g_x = g_x.repeat([batch_size,1,1]) #g_x按照batch size扩展为[b, label_N, d_model]
+            g_x = self.gc2(g_x, adj) 
+            g_x = g_x.repeat([batch_size,1,1]) 
             #g_x = g_x.transpose(1,2)
             #x = torch.matmul(x,g_x).squeeze(1)
             p_x = self.label_attention(g_x, pooled_output)
-            x = torch.cat([x,p_x],dim=-1) #x变为[b,2*d_model]
-        #else:
+            x = torch.cat([x,p_x],dim=-1) 
+       
         x = self.mlp(x)
 
         return x,break_probs
 
     def label_attention(self, g_x, x):
-        x = x.transpose(1,2) #x转置为[b,d_model,1]
-        att = torch.matmul(g_x, x) #att维度计算后变为[b,label_N,1]
-        att_score = F.softmax(att, dim=1) #att_score的维度是[b,label_N,1]
-        att_score = att_score.transpose(1,2) #att_score转置后为[b,1,label_N]
-        att_result = torch.matmul(att_score,g_x) #att_result的维度是[b, 1, d_model]
-        att_result = att_result.squeeze(1) #att_result维度缩减为[b, d_model]
+        x = x.transpose(1,2) 
+        att = torch.matmul(g_x, x) 
+        att_score = F.softmax(att, dim=1) 
+        att_score = att_score.transpose(1,2)
+        att_result = torch.matmul(att_score,g_x) 
+        att_result = att_result.squeeze(1) 
         return att_result
 
     def masked_lm_loss(self, out, y):
         batch_size = out.shape[0]
         label_N = out.shape[1]
-        #计算loss
-        #print('out1:',out)
         loss = self.loss(out,y)
 
         out = torch.sigmoid(out)
-        #print('out2:',out)
-        #计算预测值,并将预测值pred_label的形状从[b,label_N]变形成[b*label_N]
+        
         t = torch.zeros_like(out)
         pre_label = t.masked_fill(out>0.4, 1)
         pre_label = pre_label.view([batch_size*label_N])
 
-        #将真实标签完成与pred_label相同的变形
+       
         y = y.view([batch_size*label_N])
         return loss, pre_label, y
 
