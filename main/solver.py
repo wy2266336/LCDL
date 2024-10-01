@@ -42,11 +42,11 @@ class Solver():
     def _make_model(self, vocab_size, N=8, N_GCN=2, label_N=4, 
             d_model=512, d_ff=2048, h=2, nheads=4, hidden_dim=200, dropout=0.1):#, label_embedding_dim=300, threshold=0, alpha=0.2):
             """
-            N:表示transformer的层数
-            N_GCN:表示GCN的层数
-            label_N:表示标签个数
-            d_model:词向量维度
-            h:表示多头attention的头数
+           N: indicates the number of longformer layers
+           N_GCN: indicates the number of GCN layers
+           label_N: indicates the number of labels
+           d_model: word vector dimension
+           h: indicates the number of heads of multi-head attention
             """
             "Helper: Construct a model from hyperparameters."
             c = copy.deepcopy
@@ -128,11 +128,11 @@ class Solver():
                 total_step_time += time.time() - step_start
             
                 if total_batch % 100 == 0:
-                    #训练集的评价结果
+                  
                     train_acc, train_p, train_r, train_f = estimate(predict_y,golden_y)
                     #train_roc = metrics.roc_auc_score(golden_y,predict_y,average='micro')
 
-                    #验证集的评价结果
+                    
                     dev_acc, dev_p, dev_r, dev_f, dev_loss, dev_pred, dev_gold = self.evaluate(dev_data_yielder)
                     temp_scores = dev_f
                     temp_value = {'P': dev_p, 'R': dev_r, 'F1': dev_f, 'dev_pred': dev_pred, 'dev_gold': dev_gold}
