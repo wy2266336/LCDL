@@ -295,8 +295,8 @@ class data_utils():
         return masked_vec, gold_label, length
 
     def data_yielder(self, mtype='train', is_mask=True):
-        #type: 三种模式，是字符串类型，默认是'train',另外两种是'dev'和‘test’
-        #is_mask: 是否进行随机掩码，如果mtype是train时，is_mask是设置成True;如果mtype是dev或者test时,is_mask设置成False
+       #type: three modes, string type, the default is 'train', the other two are 'dev' and 'test'
+       #is_mask: whether to perform random masking, if mtype is train, is_mask is set to True; if mtype is dev or test, is_mask is set to False
         batches = []
         batch = {'input':[],'input_mask':[],'y':[]}
         datas = []
@@ -368,7 +368,7 @@ def estimate(pre_list, gold_list):
     F1 = 2*Precision*Recall/(Precision+Recall+1e-6)
     '''
     Acc, Precision, Recall, F1 = 0,0,0,0
-    average = 'macro' #average有[None, 'binary' (default), 'micro', 'macro', 'samples','weighted']
+    average = 'macro' #average [None, 'binary' (default), 'micro', 'macro', 'samples','weighted']
     Acc = metrics.accuracy_score(gold_list, pre_list)
     Precision = metrics.precision_score(gold_list,pre_list,average=average)
     Recall = metrics.recall_score(gold_list,pre_list,average=average)
